@@ -1,0 +1,4 @@
+# Copy to backend.hcl and fill in, then:  terraform init -backend-config=backend.hcl
+# backend.hcl is gitignored (bucket name is environment-specific).
+bucket = "eko-portfolio-tfstate" # the shared portfolio state bucket (created once by hand)
+region = "ap-southeast-1"

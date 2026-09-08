@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+# Auth: gcloud application-default login, or GOOGLE_APPLICATION_CREDENTIALS.
+
+gcp_project_id = "your-gcp-project-id"
+
+# Optional overrides (defaults shown):
+# gcp_region      = "asia-southeast1"
+# enable_demo_vms = false            # flip to true ONLY for demo sessions, destroy after
+# patch_group     = "demo"
+# patch_time_zone = "Asia/Jakarta"

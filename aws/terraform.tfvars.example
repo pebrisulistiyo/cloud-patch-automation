@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+# AWS auth comes from your environment (admin identity or the OIDC role in CI).
+
+alert_email = "you@example.com"
+
+# Optional overrides (defaults shown):
+# aws_region      = "ap-southeast-1"
+# enable_demo_vms = false            # flip to true ONLY for demo sessions, destroy after
+# patch_group     = "demo"
+# scan_cron       = "cron(0 3 ? * SAT *)"
+# install_cron    = "cron(0 4 1 * ? *)"
