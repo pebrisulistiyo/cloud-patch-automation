@@ -1,3 +1,8 @@
+# ---------------------------------------------------------------------------
+# Outputs: what to point at in the console and the runbook when proving the
+# deployments exist and the demo fleet is covered.
+# ---------------------------------------------------------------------------
+
 output "patch_deployments" {
   description = "VM Manager patch deployment IDs, one per OS family."
   value = {

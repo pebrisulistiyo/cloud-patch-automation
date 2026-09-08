@@ -69,8 +69,9 @@ cloud-patch-automation/
 
 ## Key decisions
 
-- **3-day auto-approval delay** on every patch baseline, if AWS/GCP pulls a
-  bad patch, the fleet never sees it. This is the "canary" of patching.
+- **A canary on both clouds**: AWS holds patches 3 days before approving them;
+  GCP rolls out zone-by-zone with a disruption budget of 1, so a bad patch
+  fails a single VM and halts the patch job instead of hitting the fleet.
 - **Windows is a first-class citizen**, `UpdateRollups` classification on AWS,
   `UPDATE_ROLLUP` on GCP. Most patch demos are Linux-only; production fleets
   are not.

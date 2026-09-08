@@ -21,8 +21,7 @@ gcloud config set project <PROJECT_ID>
 # Enable the services Terraform needs (or let a bootstrap step do it):
 gcloud services enable \
   compute.googleapis.com \
-  osconfig.googleapis.com \
-  resourcemanager.googleapis.com
+  osconfig.googleapis.com
 
 # Create the state bucket (globally unique):
 gsutil mb -l asia-southeast1 gs://your-state-bucket-gcp
@@ -48,14 +47,18 @@ terraform apply
 terraform apply
 ```
 
-- Debian 13 `e2-micro` + Windows Core 2025 `e2-small` are created with label
-  `patch-group = demo`, attached to the business-hours instance schedule.
+- Debian 13 `e2-micro` + Windows Core 2025 `e2-small` are created with labels
+  `patch-group = demo` + `os` + `os_version`, attached to the business-hours
+  instance schedule.
 - Patch deployments run monthly (first Sunday 03:00 Jakarta), for the demo,
-  run one on demand:
+  run one on demand. Patch jobs only reach **running** VMs: the business-hours
+  schedule stops the fleet at 18:00, so run this during business hours (or
+  temporarily disable the schedule). Dry-run first:
 
 ```bash
 gcloud compute os-config patch-jobs execute \
-  --instance-filter-labels=patch-group=demo --duration=1h
+  --instance-filter-group-labels=patch-group=demo \
+  --duration=1h --dry-run
 ```
 
 - Evidence: **Compute Engine to VM Manager to Patch jobs** (job history + per-VM

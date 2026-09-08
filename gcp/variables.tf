@@ -1,3 +1,9 @@
+# ---------------------------------------------------------------------------
+# Inputs. Env-specific values (project id) and policy knobs (patch group,
+# time zone) are variables, so deploying to another project or a real prod
+# fleet is a tfvars edit, not a code change.
+# ---------------------------------------------------------------------------
+
 variable "gcp_project_id" {
   description = "GCP project these resources live in."
   type        = string
