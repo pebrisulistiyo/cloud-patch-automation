@@ -6,6 +6,10 @@ data "aws_caller_identity" "current" {}
 
 resource "aws_s3_bucket" "compliance" {
   bucket = "patch-compliance-${data.aws_caller_identity.current.account_id}"
+
+  # Scratch data only: let destroy purge objects and all their versions
+  # (the bucket is versioned, so plain object deletes would still block it).
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_versioning" "compliance" {
@@ -34,8 +38,38 @@ resource "aws_s3_bucket_public_access_block" "compliance" {
   restrict_public_buckets = true
 }
 
-# Resource data sync: streams inventory + patch compliance records to S3 as
-# JSON so they can be queried (Athena) or archived without the SSM console.
+# SSM's sync service writes to the bucket, so it needs this policy
+# (canonical form from the SSM resource-data-sync docs). The sync's creation
+# test-write also requires the policy to exist first.
+resource "aws_s3_bucket_policy" "compliance" {
+  bucket = aws_s3_bucket.compliance.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "SSMBucketPermissionsCheck"
+        Effect    = "Allow"
+        Principal = { Service = "ssm.amazonaws.com" }
+        Action    = "s3:GetBucketAcl"
+        Resource  = aws_s3_bucket.compliance.arn
+      },
+      {
+        Sid       = "SSMBucketDelivery"
+        Effect    = "Allow"
+        Principal = { Service = "ssm.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = ["${aws_s3_bucket.compliance.arn}/*"]
+        Condition = {
+          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+        }
+      }
+    ]
+  })
+}
+
+# Resource data sync: streams inventory + patch compliance to S3 as JSON,
+# queryable by Athena or archived without the SSM console.
 resource "aws_ssm_resource_data_sync" "compliance" {
   name = "patch-compliance-sync"
 
@@ -45,10 +79,12 @@ resource "aws_ssm_resource_data_sync" "compliance" {
     region      = var.aws_region
     sync_format = "JsonSerDe"
   }
+
+  depends_on = [aws_s3_bucket_policy.compliance]
 }
 
 # ---------------------------------------------------------------------------
-# Alerting: notify when an instance's patch compliance state changes.
+# Alerting: SNS email when an instance's patch compliance state changes.
 # ---------------------------------------------------------------------------
 
 resource "aws_sns_topic" "compliance" {

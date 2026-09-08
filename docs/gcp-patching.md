@@ -25,16 +25,17 @@ gcloud services enable \
   resourcemanager.googleapis.com
 
 # Create the state bucket (globally unique):
-gsutil mb -l asia-southeast1 gs://eko-portfolio-tfstate-gcp
-gsutil versioning set on gs://eko-portfolio-tfstate-gcp
+gsutil mb -l asia-southeast1 gs://your-state-bucket-gcp
+gsutil versioning set on gs://your-state-bucket-gcp
 ```
 
 ### 2. Apply
 
 ```bash
 cd gcp
+cp backend.tf.example backend.tf              # remote state; skip for local state
 cp backend.hcl.example backend.hcl
-cp terraform.tfvars.example terraform.tfvars   # set gcp_project_id
+cp terraform.tfvars.example terraform.tfvars  # set gcp_project_id
 terraform init -backend-config=backend.hcl
 terraform plan
 terraform apply
@@ -47,7 +48,7 @@ terraform apply
 terraform apply
 ```
 
-- Debian 12 `e2-micro` + Windows Core 2022 `e2-small` are created with label
+- Debian 13 `e2-micro` + Windows Core 2025 `e2-small` are created with label
   `patch-group = demo`, attached to the business-hours instance schedule.
 - Patch deployments run monthly (first Sunday 03:00 Jakarta), for the demo,
   run one on demand:
@@ -73,13 +74,12 @@ Set these **repository variables** in GitHub (no secrets, WIF handles auth):
 
 | Variable | Example |
 |----------|---------|
-| `GCP_PROJECT_ID` | `eko-portfolio` |
-| `GCP_WIF_PROVIDER` | `projects/123/locations/global/workloadIdentityPools/gha/providers/gha` |
-| `GCP_WIF_SA` | `patch-ci@eko-portfolio.iam.gserviceaccount.com` |
-| `GCP_STATE_BUCKET` | `eko-portfolio-tfstate-gcp` |
+| `GCP_PROJECT_ID` | `my-gcp-project` |
+| `GCP_WIF_PROVIDER` | `projects/<id>/locations/global/workloadIdentityPools/gha/providers/gha` |
+| `GCP_WIF_SA` | `patch-ci@<project>.iam.gserviceaccount.com` |
+| `GCP_STATE_BUCKET` | `your-state-bucket-gcp` |
 
 The `gcp` job in `terraform-ci.yml` currently self-skips (gated on
 `vars.GCP_PROJECT_ID != ''`); setting these variables lights it up. The WIF
-pool, provider, and service account themselves are provisioned by
-[cloud-vending-machine/platform/gcp](../../cloud-vending-machine/platform/gcp)
-the two repos share the GCP foundation.
+pool, provider, and service account are provisioned by your GCP foundation
+platform (e.g. a shared platform repo), not by this module.

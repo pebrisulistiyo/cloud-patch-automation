@@ -6,6 +6,11 @@ output "patch_baselines" {
   }
 }
 
+output "patch_groups" {
+  description = "Patch group values per OS family (one per OS version; instances are tagged 'Patch Group' with one of these)."
+  value       = local.patch_groups
+}
+
 output "maintenance_windows" {
   description = "Maintenance window IDs for scan and install."
   value = {

@@ -12,7 +12,7 @@ validate:
 	cd gcp && terraform init -backend=false -input=false && terraform validate
 
 plan-aws:
-	cd aws && terraform init -backend-config=backend.hcl && terraform plan
+	cd aws && cp backend.tf.example backend.tf && terraform init -backend-config=backend.hcl && terraform plan
 
 plan-gcp:
-	cd gcp && terraform init -backend-config=backend.hcl && terraform plan
+	cd gcp && cp backend.tf.example backend.tf && terraform init -backend-config=backend.hcl && terraform plan

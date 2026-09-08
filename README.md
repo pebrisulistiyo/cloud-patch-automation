@@ -8,8 +8,8 @@ on two clouds, managed end-to-end with Terraform and GitHub Actions.
 | AWS | Systems Manager **Patch Manager** (baselines, maintenance windows, compliance export, alerts) | Live |
 | GCP | Compute Engine **VM Manager** (OS patch deployments, instance schedules) | Code-first (deploy-ready, applied when the GCP account exists) |
 
-![terraform](https://img.shields.io/badge/Terraform-%3E%3D1.10-844FBA)
-![aws](https://img.shields.io/badge/AWS-ap--southeast--1-FF9900)
+![terraform](https://img.shields.io/badge/Terraform-%3E%3D1.15-844FBA)
+![aws](https://img.shields.io/badge/AWS-us--east--1-FF9900)
 ![gcp](https://img.shields.io/badge/GCP-asia--southeast1-4285F4)
 ![ci](https://img.shields.io/github/actions/workflow/status/pebrisulistiyo/cloud-patch-automation/terraform-ci.yml?label=terraform-ci)
 
@@ -22,8 +22,8 @@ flowchart LR
     subgraph AWS[AWS, live]
         BL[Patch baselines<br/>Linux + Windows]
         MW[Maintenance windows<br/>scan weekly / install monthly]
-        VM1[Amazon Linux 2023<br/>t3.micro]
-        VM2[Windows Server 2022<br/>t3.small]
+        VM1[Amazon Linux 2023<br/>t3.micro spot]
+        VM2[Windows Server 2025<br/>t3.small spot]
         S3[(Compliance export<br/>S3 + Athena-ready)]
         SNS[Email alerts]
         MW --> VM1 & VM2
@@ -34,8 +34,8 @@ flowchart LR
 
     subgraph GCP[GCP, code-first]
         PD[OS patch deployments<br/>apt + Windows Update]
-        VM3[Debian 12<br/>e2-micro]
-        VM4[Windows Core 2022<br/>e2-small]
+        VM3[Debian 13<br/>e2-micro]
+        VM4[Windows Core 2025<br/>e2-small]
         SCHED[Instance schedule<br/>stop outside business hours]
         PD --> VM3 & VM4
         SCHED --> VM3 & VM4
@@ -63,7 +63,7 @@ cloud-patch-automation/
 │   └── instances.tf     #   demo VMs + instance schedule (cost guardrail)
 ├── .github/workflows/terraform-ci.yml
 └── docs/
-    ├── aws-patching.md  # demo walkthrough + evidence checklist
+    ├── aws-patching.md  # AWS demo guide: setup to destroy + evidence checklist
     └── gcp-patching.md  # runbook for when the GCP account arrives
 ```
 
@@ -74,11 +74,22 @@ cloud-patch-automation/
 - **Windows is a first-class citizen**, `UpdateRollups` classification on AWS,
   `UPDATE_ROLLUP` on GCP. Most patch demos are Linux-only; production fleets
   are not.
+- **Every instance is tagged `os` + `os_version`** (e.g. `os=windows`,
+  `os_version=2016`) on top of `Patch Group`, and each OS version gets its own
+  patch group (`demo-windows-2025`, `demo-linux-2023`). Multi-version fleets
+  stay filterable in Tag Editor, Resource Groups, and the S3 compliance
+  export, and a legacy version can get its own baseline or schedule without
+  touching the rest. AMI versions are variables, so trying another version
+  is a tfvars edit, not a code change.
 - **No SSH/RDP keys anywhere**, instances are SSM/OS-Config-agent managed
   only. Patch jobs reach the agent outbound; humans use Session Manager.
 - **Demo VMs are opt-in** (`enable_demo_vms = false` by default) and the GCP
   fleet is additionally stopped outside business hours by an instance
   schedule, patching infra should be reviewable without burning money.
+- **Demo VMs run on Spot** (`enable_spot = true` default): ~60–70% cheaper,
+  with the price capped at on-demand, so the cost table below is the worst
+  case. Interruption is possible but rare for `t3.micro`/`t3.small` — a
+  reclaimed demo VM is recreated by the next apply.
 - **Compliance is exportable, not just screenshot-able**, SSM resource data
   sync streams JSON to S3 (Athena-queryable); GCP exposes OS Inventory in the
   console.
@@ -104,35 +115,38 @@ No static AWS keys anywhere. Roles are provisioned by
 ```bash
 # AWS (live)
 cd aws
-cp backend.hcl.example backend.hcl      # shared portfolio state bucket
 cp terraform.tfvars.example terraform.tfvars
-terraform init -backend-config=backend.hcl
+terraform init                           # local state on disk, no S3 bucket needed
+#   remote state (CI path), only when you want the shared bucket:
+#     cp backend.tf.example backend.tf && cp backend.hcl.example backend.hcl
+#     && terraform init -backend-config=backend.hcl
 terraform plan
 terraform apply                          # infra only, VMs stay off
 
 # GCP (code-first: validate only, no account needed)
 cd gcp
-terraform init -backend=false && terraform validate
+terraform init && terraform validate
 ```
 
-### Demo session (AWS), see [docs/aws-patching.md](docs/aws-patching.md)
+### Demo session (AWS)
 
-1. `enable_demo_vms = true` to `terraform apply`
-2. Wait ~15 min for inventory to collect
-3. Run a scan via the maintenance window (or on demand) to screenshot Patch
-   Manager compliance
-4. Verify the S3 export + email alert
-5. `terraform destroy`
+Full step-by-step guide from zero to destroy, with the screenshot checklist:
+**[docs/aws-patching.md](docs/aws-patching.md)**.
 
-## Cost model (approximate, ap-southeast-1 / asia-southeast1)
+## Cost model (approximate, us-east-1 / asia-southeast1)
 
 | Item | ~Cost if running 24/7 | Guardrail |
 |------|----------------------|-----------|
 | Amazon Linux 2023 `t3.micro` | ~$7.60/mo | `enable_demo_vms=false`; destroy after demo |
-| Windows Server 2022 `t3.small` | ~$40–45/mo | same + AWS budgets ($20/$50/$80) from bootstrap |
-| Debian `e2-micro` | ~$5.60/mo | instance schedule stops it outside business hours |
-| Windows Core 2022 `e2-small` | ~$45–50/mo | same + GCP billing budget $10/mo (when account arrives) |
+| Windows Server 2025 `t3.small` | ~$40–45/mo | same + AWS budgets ($20/$50/$80) from bootstrap |
+| Debian 13 `e2-micro` | ~$5.60/mo | instance schedule stops it outside business hours |
+| Windows Core 2025 `e2-small` | ~$45–50/mo | same + GCP billing budget $10/mo (when account arrives) |
 | SSM / VM Manager / S3 / SNS | $0 at demo volume |, |
+
+OS versions are configurable on both clouds (`linux_ami` / `windows_ami`
+variables on AWS), so the cost table follows whatever version you demo.
+Rates shown are on-demand; the AWS demo fleet runs on Spot by default
+(`enable_spot`), typically 60–70% below these numbers.
 
 ## Evidence (screenshots)
 
@@ -144,7 +158,10 @@ terraform init -backend=false && terraform validate
 
 - **Compliance data goes to S3, not a warehouse**, Athena can query it in
   place; a dedicated warehouse would be overkill for a demo.
-- **One patch group for both OSes**, Patch Manager routes each instance to
-  the baseline matching its OS, so a single tag value covers the mixed fleet.
+- **One patch group per OS version, not one per fleet**, so compliance,
+  schedules, and alerts are trackable per version, and adding Windows 2016
+  next to Windows 2025 is one tfvars edit (per-version groups make a
+  version-specific baseline possible later, e.g. a longer approval soak for
+  legacy OSes).
 - **GCP reporting is console-based (OS Inventory)**, lean;
   exporting to BigQuery would be the natural next step.

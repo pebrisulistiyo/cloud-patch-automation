@@ -16,6 +16,8 @@ terraform.rc
 !*.tfvars.example
 backend.hcl
 !backend.hcl.example
+backend.tf
+!backend.tf.example
 plan.txt
 
 # DO commit .terraform.lock.hcl — it pins provider hashes for reproducible builds.

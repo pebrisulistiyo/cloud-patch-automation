@@ -1,11 +1,18 @@
 # Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
-# AWS auth comes from your environment (admin identity or the OIDC role in CI).
+# Every variable has a default; only alert_email is required.
 
 alert_email = "you@example.com"
 
 # Optional overrides (defaults shown):
-# aws_region      = "ap-southeast-1"
-# enable_demo_vms = false            # flip to true ONLY for demo sessions, destroy after
-# patch_group     = "demo"
-# scan_cron       = "cron(0 3 ? * SAT *)"
+# aws_region      = "us-east-1"
+# enable_demo_vms = false     # demo VMs; enable only for demo sessions
+# enable_spot     = true      # false = on-demand instances
+# patch_group     = "demo"    # patch groups become demo-linux-2023, demo-windows-2025
+
+# To demo a different OS version, change the AMI pattern + version; the
+# os_version tag and patch group follow automatically.
+# linux_ami   = { name_pattern = "al2023-ami-2023.*-x86_64", version = "2023" }
+# windows_ami = { name_pattern = "Windows_Server-2025-English-Full-Base-*", version = "2025" }
+
+# scan_cron       = "cron(0 3 ? * SAT *)"   # AWS cron, UTC
 # install_cron    = "cron(0 4 1 * ? *)"

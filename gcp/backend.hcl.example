@@ -1,7 +1,4 @@
-# Copy to backend.hcl and fill in, then:  terraform init -backend-config=backend.hcl
-# backend.hcl is gitignored (bucket name is environment-specific).
-#
-# The GCS state bucket is created once by hand (or by cloud-vending-machine's
-# platform/gcp when its GCP account arrives). GCS buckets are globally unique.
-bucket = "eko-portfolio-tfstate-gcp"
+# Copy to backend.hcl and fill in, then: terraform init -backend-config=backend.hcl
+# backend.hcl is gitignored. GCS buckets are globally unique.
+bucket = "your-state-bucket-gcp"
 prefix = "cloud-patch-automation/gcp"

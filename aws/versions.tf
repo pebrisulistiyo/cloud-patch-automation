@@ -8,11 +8,7 @@ terraform {
     }
   }
 
-  # State lives in the shared portfolio bucket (created once by hand, see
-  # terraform-bootstrap). bucket + region come from -backend-config=backend.hcl.
-  backend "s3" {
-    key          = "cloud-patch-automation/aws/terraform.tfstate"
-    encrypt      = true
-    use_lockfile = true
-  }
+  # Local state by default (aws/terraform.tfstate), so the stack runs with
+  # no S3 bucket. For remote state (CI): cp backend.tf.example backend.tf,
+  # then terraform init -backend-config=backend.hcl.
 }

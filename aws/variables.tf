@@ -1,22 +1,28 @@
 variable "aws_region" {
   description = "AWS region for all resources."
   type        = string
-  default     = "ap-southeast-1"
+  default     = "us-east-1"
 
   validation {
     condition     = can(regex("^[a-z]{2}-[a-z]+-\\d$", var.aws_region))
-    error_message = "aws_region must look like a region code, e.g. ap-southeast-1."
+    error_message = "aws_region must look like a region code, e.g. us-east-1."
   }
 }
 
 variable "enable_demo_vms" {
-  description = "Create the Linux + Windows demo instances. Default false: VMs cost money 24/7, flip this on only for demo sessions, destroy afterwards."
+  description = "Create the Linux + Windows demo instances. Off by default; enable only for demo sessions and destroy afterwards."
   type        = bool
   default     = false
 }
 
+variable "enable_spot" {
+  description = "Run the demo VMs on Spot (~60-70% cheaper, price capped at on-demand). Set false for on-demand instances."
+  type        = bool
+  default     = true
+}
+
 variable "alert_email" {
-  description = "Email that receives patch-compliance change alerts (SNS subscription)."
+  description = "Email address that receives patch-compliance change alerts (SNS subscription)."
   type        = string
 
   validation {
@@ -26,7 +32,7 @@ variable "alert_email" {
 }
 
 variable "patch_group" {
-  description = "Patch group value; instances tagged 'Patch Group' = this value are patched by the maintenance windows."
+  description = "Prefix for patch groups; each OS version gets its own group (<prefix>-<os>-<version>)."
   type        = string
   default     = "demo"
 
@@ -36,14 +42,48 @@ variable "patch_group" {
   }
 }
 
+variable "linux_ami" {
+  description = "Amazon Linux AMI for the demo VM: a name pattern plus the version tag (e.g. version = \"2023\")."
+  type = object({
+    name_pattern = string
+    version      = string
+  })
+  default = {
+    name_pattern = "al2023-ami-2023.*-x86_64"
+    version      = "2023"
+  }
+
+  validation {
+    condition     = can(regex("^\\d{4}$", var.linux_ami.version))
+    error_message = "linux_ami.version must be a 4-digit year, e.g. \"2023\"."
+  }
+}
+
+variable "windows_ami" {
+  description = "Windows Server AMI for the demo VM: a name pattern plus the version tag (e.g. version = \"2025\")."
+  type = object({
+    name_pattern = string
+    version      = string
+  })
+  default = {
+    name_pattern = "Windows_Server-2025-English-Full-Base-*"
+    version      = "2025"
+  }
+
+  validation {
+    condition     = can(regex("^\\d{4}$", var.windows_ami.version))
+    error_message = "windows_ami.version must be a 4-digit year, e.g. \"2016\"."
+  }
+}
+
 variable "scan_cron" {
-  description = "Cron for the weekly patch-scan maintenance window (AWS cron syntax, local time)."
+  description = "Cron for the weekly patch-scan maintenance window (AWS cron syntax, UTC)."
   type        = string
   default     = "cron(0 3 ? * SAT *)"
 }
 
 variable "install_cron" {
-  description = "Cron for the monthly patch-install maintenance window (AWS cron syntax, local time)."
+  description = "Cron for the monthly patch-install maintenance window (AWS cron syntax, UTC)."
   type        = string
   default     = "cron(0 4 1 * ? *)"
 }

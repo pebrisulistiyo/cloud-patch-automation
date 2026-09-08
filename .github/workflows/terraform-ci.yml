@@ -77,6 +77,7 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
       - name: terraform plan
         run: |
+          cp backend.tf.example backend.tf   # remote state: only CI does this
           terraform init \
             -backend-config="bucket=${{ secrets.AWS_STATE_BUCKET }}" \
             -backend-config="region=${{ secrets.AWS_REGION }}" \
@@ -115,6 +116,7 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
       - name: terraform apply
         run: |
+          cp backend.tf.example backend.tf   # remote state: only CI does this
           terraform init \
             -backend-config="bucket=${{ secrets.AWS_STATE_BUCKET }}" \
             -backend-config="region=${{ secrets.AWS_REGION }}" \
@@ -142,6 +144,7 @@ jobs:
           service_account: ${{ vars.GCP_WIF_SA }}
       - name: terraform ${{ inputs.command }}
         run: |
+          cp backend.tf.example backend.tf   # remote state: only CI does this
           terraform init \
             -backend-config="bucket=${{ vars.GCP_STATE_BUCKET }}" \
             -input=false

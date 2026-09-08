@@ -1,0 +1,17 @@
+# Remote-state backend for CI and shared-bucket use. Terraform ignores this
+# file until it is copied to backend.tf (gitignored):
+#
+#   cp backend.tf.example backend.tf
+#   cp backend.hcl.example backend.hcl    # bucket + region
+#   terraform init -backend-config=backend.hcl
+#
+# Without backend.tf, state stays local (aws/terraform.tfstate) - no S3
+# needed for local testing.
+terraform {
+  backend "s3" {
+    # bucket + region come from -backend-config=backend.hcl (env-specific)
+    key          = "cloud-patch-automation/aws/terraform.tfstate"
+    encrypt      = true
+    use_lockfile = true
+  }
+}
