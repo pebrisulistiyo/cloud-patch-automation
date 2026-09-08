@@ -53,7 +53,18 @@ terraform apply
 - Patch deployments run monthly (first Sunday 03:00 Jakarta), for the demo,
   run one on demand. Patch jobs only reach **running** VMs: the business-hours
   schedule stops the fleet at 18:00, so run this during business hours (or
-  temporarily disable the schedule). Dry-run first:
+  temporarily disable the schedule).
+
+- Before the first patch job, confirm the OS Config agent is reporting — the
+  first inventory can take ~10 minutes after boot, and a job started earlier
+  reports `NO_AGENT_DETECTED`:
+
+```bash
+gcloud compute os-config inventories list \
+  --location=asia-southeast1-a
+```
+
+  Both VMs must appear. Then dry-run:
 
 ```bash
 gcloud compute os-config patch-jobs execute \

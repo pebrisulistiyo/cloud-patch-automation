@@ -10,6 +10,13 @@
 # intentionally finds the demo fleet stopped (see osconfig.tf): a cost-
 # guardrail demo fleet patches on demand during business hours instead. A
 # prod fleet would trade this schedule for its own maintenance-aware hours.
+#
+# Egress matters: the OS Config agent, apt, and Windows Update all need
+# outbound internet. These VMs get ephemeral external IPs (zero fixed cost);
+# a fully-private prod fleet would instead use Private Google Access for
+# Google APIs plus Cloud NAT for package repos (~$32/mo for the NAT gateway).
+# In exchange for public IPs, the deny-all-ingress rule below closes GCP's
+# default-allow-ssh/rdp rules that would otherwise expose ports 22/3389.
 
 data "google_compute_image" "debian" {
   family  = "debian-13"
@@ -23,6 +30,23 @@ data "google_compute_image" "windows_core" {
 
 # Start Mon-Fri 07:30, stop 18:00, Jakarta time. Outside that window the VMs
 # are stopped and cost nothing (persistent disks still bill, pennies).
+# GCP's default VPC ships default-allow-ssh (tcp:22) and default-allow-rdp
+# (tcp:3389) ingress open to 0.0.0.0/0. With public IPs on the VMs those
+# would be internet-exposed; this outranks them (1000 < 65534) and denies
+# everything inbound. These VMs are agent-managed only: nobody SSHes in.
+resource "google_compute_firewall" "deny_all_ingress" {
+  name      = "deny-all-internet-ingress"
+  network   = "default"
+  direction = "INGRESS"
+  priority  = 1000
+
+  deny {
+    protocol = "all"
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+}
+
 resource "google_compute_resource_policy" "business_hours" {
   name   = "business-hours"
   region = var.gcp_region
@@ -52,10 +76,13 @@ resource "google_compute_instance" "demo_linux" {
     }
   }
 
-  # No external IP: OS Config agent reaches patch jobs outbound. Access is
-  # via the GCP console / gcloud, not SSH keys.
+  # Ephemeral external IP: the agent, apt, and Windows Update need outbound
+  # egress (see header). Ingress is denied fleet-wide by the firewall rule
+  # above, so the IP is an egress path, not an attack surface.
   network_interface {
     network = "default"
+
+    access_config {}
   }
 
   # Preinstalled != active: without this metadata the agent never reports
@@ -96,6 +123,8 @@ resource "google_compute_instance" "demo_windows" {
 
   network_interface {
     network = "default"
+
+    access_config {}
   }
 
   metadata = {
