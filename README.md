@@ -97,7 +97,8 @@ cloud-patch-automation/
 
 ## CI/CD pipeline
 
-`terraform-ci.yml` runs on every PR touching `aws/**` or `gcp/**`:
+`terraform-ci.yml` runs on every PR touching `aws/**` or `gcp/**`, plus a
+manual dispatch for both clouds:
 
 | Job | Trigger | Auth |
 |-----|---------|------|
@@ -106,10 +107,19 @@ cloud-patch-automation/
 | `validate` (aws + gcp, `-backend=false`) | PR / main | **none, this is how code-first GCP proves deploy-readiness** |
 | `plan-aws` to comments plan on the PR | PR | GitHub OIDC to read-only `plan` role |
 | `apply-aws` | main | GitHub OIDC to main-only `apply` role |
-| `gcp` (plan/apply, manual) | workflow_dispatch | self-skips until GCP variables exist, see [gcp-patching.md](docs/gcp-patching.md) |
+| `manual-aws` (plan/apply/destroy) | workflow_dispatch (`cloud=aws`) | plan → read-only `plan` role; apply/destroy → `apply` role |
+| `gcp` (plan/apply/destroy, manual) | workflow_dispatch (`cloud=gcp`) | self-skips until GCP variables exist, see [gcp-patching.md](docs/gcp-patching.md) |
+
+`plan-aws` and `apply-aws` wait on `lint`/`fmt`/`validate`. The manual
+dispatch jobs do too — except `destroy`, which always runs: an emergency
+teardown must never be blocked by a failing linter.
 
 No static AWS keys anywhere. Roles are provisioned by
 [terraform-bootstrap](https://github.com/pebrisulistiyo/terraform-bootstrap).
+
+CI passes `alert_email` (the only required variable) to Terraform via the
+optional repository variable `TF_ALERT_EMAIL`; until set, it falls back to
+`demo@example.com` (the SNS subscription just stays pending).
 
 ## Local usage
 

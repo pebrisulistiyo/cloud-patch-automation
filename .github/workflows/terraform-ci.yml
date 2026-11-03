@@ -8,12 +8,18 @@ on:
     paths: ["aws/**", "gcp/**", ".github/workflows/terraform-ci.yml"]
   workflow_dispatch:
     inputs:
+      cloud:
+        description: "Cloud to run the command against"
+        required: true
+        type: choice
+        default: aws
+        options: [aws, gcp]
       command:
-        description: "GCP terraform command to run (GCP is code-first; jobs run once the GCP variables exist)"
+        description: "Terraform command to run"
         required: true
         type: choice
         default: plan
-        options: [plan, apply]
+        options: [plan, apply, destroy]
 
 permissions:
   id-token: write # OIDC to AWS
@@ -62,10 +68,15 @@ jobs:
   # --- AWS plan: PR-only, read-only role ------------------------------------
   plan-aws:
     if: github.event_name == 'pull_request'
+    needs: [lint, fmt, validate]
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: aws
+    env:
+      # Only required variable without a default; falls back so CI plan
+      # works before the repo variable exists.
+      TF_VAR_alert_email: ${{ vars.TF_ALERT_EMAIL || 'demo@example.com' }}
     steps:
       - uses: actions/checkout@v6
       - uses: hashicorp/setup-terraform@v4
@@ -101,10 +112,13 @@ jobs:
   # --- AWS apply: main only, apply role ------------------------------------
   apply-aws:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [lint, fmt, validate]
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: aws
+    env:
+      TF_VAR_alert_email: ${{ vars.TF_ALERT_EMAIL || 'demo@example.com' }}
     steps:
       - uses: actions/checkout@v6
       - uses: hashicorp/setup-terraform@v4
@@ -123,16 +137,75 @@ jobs:
             -input=false
           terraform apply -auto-approve -input=false
 
+  # --- AWS manual dispatch: plan/apply/destroy from the Actions UI ----------
+  # plan runs with the read-only plan role; apply/destroy run with the apply
+  # role (destroy needs the same delete permissions). Dispatch from main:
+  # the OIDC trust policies key on the main ref.
+  manual-aws:
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      inputs.cloud == 'aws' &&
+      (inputs.command == 'destroy' ||
+       (needs.lint.result == 'success' &&
+        needs.fmt.result == 'success' &&
+        needs.validate.result == 'success'))
+    needs: [lint, fmt, validate]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aws
+    env:
+      TF_VAR_alert_email: ${{ vars.TF_ALERT_EMAIL || 'demo@example.com' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ">=1.15"
+      - name: Debug OIDC claims (temporary, remove after fix)
+        run: |
+          curl -sLS "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            -H "User-Agent: actions/oidc-client" \
+            | jq -r .value | cut -d. -f2 \
+            | python3 -c "import sys,base64,json; p=sys.stdin.read().strip(); p+='='*(-len(p)%4); print(json.dumps(json.loads(base64.urlsafe_b64decode(p)), indent=2))"
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ inputs.command == 'plan' && vars.AWS_PLAN_ROLE_ARN || vars.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: terraform ${{ inputs.command }}
+        run: |
+          cp backend.tf.example backend.tf   # remote state: only CI does this
+          terraform init \
+            -backend-config="bucket=${{ secrets.AWS_STATE_BUCKET }}" \
+            -backend-config="region=${{ secrets.AWS_REGION }}" \
+            -input=false
+          case "${{ inputs.command }}" in
+            plan)    terraform plan -no-color -input=false ;;
+            destroy) terraform destroy -auto-approve -input=false ;;
+            *)       terraform apply -auto-approve -input=false ;;
+          esac
+
   # --- GCP: code-first. Jobs self-skip until the GCP variables exist. -------
   # When the GCP account arrives: set GCP_PROJECT_ID / GCP_WIF_PROVIDER /
   # GCP_WIF_SA / GCP_STATE_BUCKET (repository variables) and these jobs light
   # up. See docs/gcp-patching.md.
   gcp:
-    if: github.event_name == 'workflow_dispatch' && vars.GCP_PROJECT_ID != ''
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      inputs.cloud == 'gcp' &&
+      vars.GCP_PROJECT_ID != '' &&
+      (inputs.command == 'destroy' ||
+       (needs.lint.result == 'success' &&
+        needs.fmt.result == 'success' &&
+        needs.validate.result == 'success'))
+    needs: [lint, fmt, validate]
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: gcp
+    env:
+      # gcp_project_id is required and has no default; feed it to Terraform.
+      TF_VAR_gcp_project_id: ${{ vars.GCP_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v6
       - uses: hashicorp/setup-terraform@v4
@@ -148,8 +221,8 @@ jobs:
           terraform init \
             -backend-config="bucket=${{ vars.GCP_STATE_BUCKET }}" \
             -input=false
-          if [ "${{ inputs.command }}" = "apply" ]; then
-            terraform apply -auto-approve -input=false
-          else
-            terraform plan -no-color -input=false
-          fi
+          case "${{ inputs.command }}" in
+            plan)    terraform plan -no-color -input=false ;;
+            destroy) terraform destroy -auto-approve -input=false ;;
+            *)       terraform apply -auto-approve -input=false ;;
+          esac
